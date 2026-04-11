@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>⚡ VM OBFUSCATOR</title>
+
+<style>
+body{
+margin:0;
+background:black;
+color:#00ff88;
+font-family: monospace;
+direction:rtl;
+}
+canvas{
+position:fixed;
+top:0;
+left:0;
+z-index:-1;
+}
+textarea{
+width:80%;
+height:120px;
+margin:10px;
+background:black;
+color:#00ff88;
+border:1px solid #00ff88;
+}
+button{
+padding:10px 15px;
+margin:5px;
+background:#00ff88;
+border:none;
+cursor:pointer;
+color:black;
+}
+h1{color:#00ff88}
+</style>
+</head>
+
+<body>
+
+<canvas id="bg"></canvas>
+
+<div style="text-align:center">
+<h1>💀 آلة الطلاسم VM</h1>
+
+<h2>🔐 تشفير</h2>
+<textarea id="in"></textarea><br>
+<button onclick="enc()">تشفير</button>
+<textarea id="out"></textarea>
+
+<h2>🔓 فك التشفير</h2>
+<textarea id="in2"></textarea><br>
+<button onclick="dec()">فك التشفير</button>
+<textarea id="out2"></textarea>
+</div>
+
+<script>
+// خلفية طلاسم
+const c=document.getElementById("bg");
+const x=c.getContext("2d");
+c.width=innerWidth;
+c.height=innerHeight;
+
+let ch="01█▓▒░☠☣✶✧✬✪✷";
+ch=ch.split("");
+let d=[];
+for(let i=0;i<100;i++) d[i]=1;
+
+function draw(){
+x.fillStyle="rgba(0,0,0,0.06)";
+x.fillRect(0,0,c.width,c.height);
+x.fillStyle="#0f0";
+for(let i=0;i<d.length;i++){
+let t=ch[Math.random()*ch.length|0];
+x.fillText(t,i*12,d[i]*12);
+if(d[i]*12>c.height)d[i]=0;
+d[i]++;
+}}
+setInterval(draw,30);
+
+// random
+function r(n){
+let c="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+let s="";
+for(let i=0;i<n;i++) s+=c[Math.random()*c.length|0];
+return s;
+}
+
+// =========================
+// 🔐 ENCRYPT (VM STYLE)
+// =========================
+function enc(){
+
+let code=document.getElementById("in").value;
+
+// طبقات قوية
+let s=btoa(unescape(encodeURIComponent(code)));
+s=s.split("").reverse().join("");
+s=btoa(s);
+s=[...s].map(x=>x.charCodeAt(0)+7).join("#");
+s=btoa(s);
+s=s.split("").reverse().join("");
+
+let A=r(6),B=r(6);
+
+let junk="--☠☣✶PROTECTED_VM_" + r(20);
+
+let out=`
+${junk}
+return(function()
+
+local ${A}="${s}"
+
+local function ${B}(x)
+
+x=x:reverse()
+x=atob(x)
+
+local t=""
+for v in string.gmatch(x,"[^#]+") do
+t=t..string.char(tonumber(v)-7)
+end
+
+t=atob(t:reverse())
+
+return (loadstring or load)(t)()
+end
+
+return ${B}(${A})
+
+end)()
+`;
+
+document.getElementById("out").value=out;
+}
+
+// =========================
+// 🔓 DECRYPT
+// =========================
+function dec(){
+try{
+
+let s=document.getElementById("in2").value;
+
+let m=s.match(/"([^"]+)"/)[1];
+
+m=m.split("").reverse().join("");
+m=atob(m);
+
+let t="";
+m.split("#").forEach(v=>{
+t+=String.fromCharCode(v-7);
+});
+
+t=atob(t.split("").reverse().join(""));
+t=decodeURIComponent(escape(atob(t)));
+
+document.getElementById("out2").value=t;
+
+}catch{
+document.getElementById("out2").value="❌ فشل فك التشفير";
+}
+}
+</script>
+
+</body>
+</html>
