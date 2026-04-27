@@ -1,0 +1,171 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
+
+local controlModule = require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule"):WaitForChild("ControlModule"))
+
+
+local isFlying = false
+local flyVelocity = nil
+local flyGyro = nil
+local powerAura = nil
+local FLY_SPEED = 350
+local MAX_SPEED = 1000
+
+
+local isNoclipping = false
+local noclipConnection = nil
+
+
+
+local MainGui = Instance.new("ScreenGui", CoreGui)
+MainGui.Name = "Chimera_UI_v18"
+MainGui.ResetOnSpawn = false
+
+
+local ShadowFrame = Instance.new("Frame", MainGui)
+ShadowFrame.Size = UDim2.new(0, 220, 0, 120)
+ShadowFrame.Position = UDim2.new(0, 20, 0.5, -60)
+ShadowFrame.BackgroundColor3 = Color3.new(0, 0, 0) -- Black
+ShadowFrame.BackgroundTransparency = 0.6 -- Semi-transparent
+ShadowFrame.BorderSizePixel = 0
+ShadowFrame.Active = true
+ShadowFrame.Draggable = true
+Instance.new("UICorner", ShadowFrame).CornerRadius = UDim.new(0, 5)
+
+
+local FlightToggleButton = Instance.new("TextButton", ShadowFrame)
+FlightToggleButton.Size = UDim2.new(0, 90, 0, 25)
+FlightToggleButton.Position = UDim2.new(0, 10, 0, 10)
+FlightToggleButton.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+FlightToggleButton.Font = Enum.Font.SourceSansBold
+FlightToggleButton.Text = "الطيران: OFF"
+FlightToggleButton.TextColor3 = Color3.new(1, 1, 1)
+FlightToggleButton.TextSize = 14
+Instance.new("UICorner", FlightToggleButton).CornerRadius = UDim.new(0, 3)
+
+
+local NoclipToggleButton = Instance.new("TextButton", ShadowFrame)
+NoclipToggleButton.Size = UDim2.new(0, 100, 0, 25)
+NoclipToggleButton.Position = UDim2.new(1, -110, 0, 10)
+NoclipToggleButton.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+NoclipToggleButton.Font = Enum.Font.SourceSansBold
+NoclipToggleButton.Text = "اختراق الجدار: OFF"
+NoclipToggleButton.TextColor3 = Color3.new(1, 1, 1)
+NoclipToggleButton.TextSize = 12
+Instance.new("UICorner", NoclipToggleButton).CornerRadius = UDim.new(0, 3)
+
+
+local SpeedBox = Instance.new("TextBox", ShadowFrame)
+SpeedBox.Size = UDim2.new(0, 200, 0, 25)
+SpeedBox.Position = UDim2.new(0, 10, 0, 45)
+SpeedBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+SpeedBox.Font = Enum.Font.SourceSans
+SpeedBox.Text = tostring(FLY_SPEED)
+SpeedBox.PlaceholderText = "أدخل السرعة..."
+SpeedBox.TextColor3 = Color3.new(1, 1, 1)
+SpeedBox.TextSize = 14
+Instance.new("UICorner", SpeedBox).CornerRadius = UDim.new(0, 3)
+
+
+local SpeedLabel = Instance.new("TextLabel", ShadowFrame)
+SpeedLabel.Size = UDim2.new(1, -20, 0, 20)
+SpeedLabel.Position = UDim2.new(0, 10, 0, 70)
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.Font = Enum.Font.SourceSansLight
+SpeedLabel.TextColor3 = Color3.new(1, 1, 1)
+SpeedLabel.TextSize = 12
+SpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+SpeedLabel.Text = "Speed: " .. FLY_SPEED .. " / " .. MAX_SPEED
+
+
+local CreditLabel = Instance.new("TextLabel", ShadowFrame)
+CreditLabel.Size = UDim2.new(1, 0, 0, 15)
+CreditLabel.Position = UDim2.new(0, 0, 1, -15)
+CreditLabel.BackgroundTransparency = 1
+CreditLabel.Font = Enum.Font.SourceSansItalic
+CreditLabel.TextColor3 = Color3.new(1, 1, 1)
+CreditLabel.TextSize = 10
+CreditLabel.Text = "made by Fares"
+
+
+
+
+local function createAura(parent)
+    powerAura = Instance.new("ParticleEmitter", parent)
+    powerAura.Color = ColorSequence.new(Color3.fromRGB(0, 170, 255), Color3.fromRGB(85, 255, 255)); powerAura.LightEmission = 0.5
+    powerAura.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(0.5, 3), NumberSequenceKeypoint.new(1, 2)})
+    powerAura.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(0.5, 0.5), NumberSequenceKeypoint.new(1, 1)})
+    powerAura.Lifetime = NumberRange.new(0.5, 1); powerAura.Rate = 50; powerAura.Speed = NumberRange.new(1); powerAura.SpreadAngle = Vector2.new(360, 360); powerAura.Enabled = true
+end
+
+local function startFlying()
+    local char = LocalPlayer.Character; if not char or isFlying then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart"); local humanoid = char:FindFirstChild("Humanoid"); if not (hrp and humanoid) then return end
+    isFlying = true; humanoid.PlatformStand = true
+    flyGyro = Instance.new("BodyGyro", hrp); flyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge); flyGyro.P = 50000
+    flyVelocity = Instance.new("BodyVelocity", hrp); flyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge); flyVelocity.Velocity = Vector3.new(0, 0, 0)
+    createAura(hrp)
+    FlightToggleButton.Text = "الطيران: ON"; FlightToggleButton.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
+end
+
+local function stopFlying()
+    if not isFlying then return end; isFlying = false
+    if flyVelocity then flyVelocity:Destroy() end; if flyGyro then flyGyro:Destroy() end; if powerAura then powerAura:Destroy(); powerAura = nil end
+    local char = LocalPlayer.Character; if char and char:FindFirstChild("Humanoid") then char.Humanoid.PlatformStand = false end
+    FlightToggleButton.Text = "حقوق الدراك | الطيران: OFF"; FlightToggleButton.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+end
+
+
+local function startNoclipping()
+    if isNoclipping then return end; isNoclipping = true
+    NoclipToggleButton.Text = "الاختراق: ON"; NoclipToggleButton.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
+    noclipConnection = RunService.Stepped:Connect(function()
+        local char = LocalPlayer.Character
+        if not char then return end
+        char:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Running)
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
+            end
+        end
+    end)
+end
+
+local function stopNoclipping()
+    if not isNoclipping then return end; isNoclipping = false
+    if noclipConnection then noclipConnection:Disconnect(); noclipConnection = nil end
+    NoclipToggleButton.Text = "اختراق الجدار: OFF"; NoclipToggleButton.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+end
+
+
+FlightToggleButton.MouseButton1Click:Connect(function() if isFlying then stopFlying() else startFlying() end end)
+NoclipToggleButton.MouseButton1Click:Connect(function() if isNoclipping then stopNoclipping() else startNoclipping() end end)
+
+SpeedBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        local newSpeed = tonumber(SpeedBox.Text)
+        if newSpeed and newSpeed >= 0 and newSpeed <= MAX_SPEED then FLY_SPEED = newSpeed else FLY_SPEED = 150 end
+        SpeedBox.Text = tostring(FLY_SPEED); SpeedLabel.Text = "Speed: " .. FLY_SPEED .. " / " .. MAX_SPEED
+    end
+end)
+
+
+RunService.RenderStepped:Connect(function()
+    if not isFlying or not flyVelocity or not flyGyro then return end
+    local char = LocalPlayer.Character; local humanoid = char and char:FindFirstChild("Humanoid"); local camera = workspace.CurrentCamera
+    if not (humanoid and camera) then stopFlying(); return end
+    flyGyro.CFrame = camera.CFrame
+    local moveVector = controlModule:GetMoveVector()
+    local direction = Vector3.new(moveVector.X, moveVector.Y, moveVector.Z)
+    flyVelocity.Velocity = camera.CFrame:VectorToWorldSpace(direction) * FLY_SPEED
+end)
+
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    char:WaitForChild("Humanoid").Died:Connect(function()
+        if isFlying then stopFlying() end
+        if isNoclipping then stopNoclipping() end
+    end)
+end)
