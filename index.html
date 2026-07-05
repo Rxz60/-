@@ -1,169 +1,436 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<title>⚡ VM OBFUSCATOR</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>أزرق الفخامة | الواجهة المطلقة</title>
+  <style>
+    /* تطهير كوني وطغيان الأزرق الداكن جداً */
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #010a18; /* أزرق أسود عميق جداً */
+      font-family: 'Cairo', 'Segoe UI', 'Tajawal', sans-serif;
+    }
 
-<style>
-body{
-margin:0;
-background:black;
-color:#00ff88;
-font-family: monospace;
-direction:rtl;
-}
-canvas{
-position:fixed;
-top:0;
-left:0;
-z-index:-1;
-}
-textarea{
-width:80%;
-height:120px;
-margin:10px;
-background:black;
-color:#00ff88;
-border:1px solid #00ff88;
-}
-button{
-padding:10px 15px;
-margin:5px;
-background:#00ff88;
-border:none;
-cursor:pointer;
-color:black;
-}
-h1{color:#00ff88}
-</style>
+    /* القماشة الخلفية للغموض البرمجي (WebGL مخفي لكن يُشعر بثقله) */
+    #shroudCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+    }
+
+    /* الحاوية الرئيسية التي تحمل الحواف الدائرية والستروك السائر */
+    .portal-frame {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 70vw;
+      height: 70vh;
+      min-width: 300px;
+      min-height: 400px;
+      border-radius: 60px; /* حواف دائرية فاخرة جداً */
+      background: rgba(0, 5, 20, 0.65);
+      backdrop-filter: blur(16px) saturate(180%);
+      box-shadow: 0 40px 90px rgba(0, 150, 255, 0.3), inset 0 0 80px rgba(0, 80, 200, 0.4);
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none; /* يسمح بمرور الأحداث للخلف إن لزم */
+    }
+
+    /* العنصر الذي يحمل الستروك الدائري المضيء (يمشي على الحافة) */
+    .marching-glow {
+      position: absolute;
+      top: -4px;
+      left: -4px;
+      width: calc(100% + 8px);
+      height: calc(100% + 8px);
+      border-radius: 64px; /* أوسع بقليل من الحاوية */
+      pointer-events: none;
+      z-index: 11;
+      /* سنستخدم SVG أو canvas للستروك، لكن الأجمل استخدام خاصية border مع قناع متحرك */
+      /* لكن لتحقيق "ستروك يمشي على الحواف" بدقة نستخدم ::after مع كونيك غرادينت دوار */
+    }
+
+    /* تقنية الستروك الأزرق الذي يسير بلا انقطاع: استخدام دوران مخروطي + قناع */
+    .marching-glow::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        transparent 60deg,
+        #00a6ff 90deg,
+        #004c99 120deg,
+        transparent 150deg,
+        transparent 210deg,
+        #0088ff 240deg,
+        #001f4d 270deg,
+        transparent 300deg,
+        transparent 360deg
+      );
+      filter: blur(1.8px) drop-shadow(0 0 20px #0066ff);
+      animation: rotateStroke 4s linear infinite;
+      mask: radial-gradient(farthest-side, transparent calc(100% - 6px), white calc(100% - 5px));
+      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), white calc(100% - 5px));
+      opacity: 0.95;
+    }
+
+    /* طبقة ثانية للستروك لزيادة التعقيد واللمعان */
+    .marching-glow::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      background: conic-gradient(
+        from 90deg,
+        transparent 0deg,
+        transparent 80deg,
+        #0088ff 100deg,
+        #002244 130deg,
+        transparent 160deg,
+        transparent 220deg,
+        #00ccff 250deg,
+        #001122 280deg,
+        transparent 310deg,
+        transparent 360deg
+      );
+      filter: blur(2.5px) drop-shadow(0 0 35px #0af);
+      animation: rotateStroke 5.5s linear infinite reverse;
+      mask: radial-gradient(farthest-side, transparent calc(100% - 8px), white calc(100% - 7px));
+      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), white calc(100% - 7px));
+      mix-blend-mode: screen;
+      opacity: 0.9;
+    }
+
+    @keyframes rotateStroke {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* نص مركزي فاخر يعكس الروح */
+    .prestige-text {
+      position: relative;
+      z-index: 15;
+      color: rgba(210, 230, 255, 0.95);
+      text-align: center;
+      font-weight: 700;
+      font-size: clamp(2.5rem, 8vw, 5.5rem);
+      letter-spacing: 0.15em;
+      text-shadow: 0 0 30px #003366, 0 0 70px #002244, 0 10px 30px black;
+      background: linear-gradient(180deg, #e0f0ff 0%, #6090c0 80%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 25px #0af);
+      pointer-events: none;
+      margin: 0;
+      line-height: 1.2;
+    }
+
+    .sub-glow {
+      font-size: 1.2rem;
+      letter-spacing: 0.3em;
+      color: #88bbff;
+      text-shadow: 0 0 30px #0044aa;
+      opacity: 0.8;
+      margin-top: 10px;
+      z-index: 15;
+      position: relative;
+    }
+
+    /* كانفس للبرمجيات الغريبة غير المفهومة (شيفرات تطفو) */
+    #cipherCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 5;
+      pointer-events: none;
+      opacity: 0.7;
+    }
+
+    /* تأثيرات إضافية للفخامة حول الحواف */
+    .corner-spark {
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      background: radial-gradient(circle, #0088ff 5%, transparent 70%);
+      filter: blur(18px);
+      z-index: 8;
+      pointer-events: none;
+    }
+
+    .spark-tl { top: -30px; left: -30px; }
+    .spark-tr { top: -30px; right: -30px; }
+    .spark-bl { bottom: -30px; left: -30px; }
+    .spark-br { bottom: -30px; right: -30px; }
+  </style>
 </head>
-
 <body>
+  <!-- شيفرات غامضة متحركة (برمجيات غير مفهومة) -->
+  <canvas id="cipherCanvas"></canvas>
+  <!-- خلفية WebGL Shader للعمق -->
+  <canvas id="shroudCanvas"></canvas>
 
-<canvas id="bg"></canvas>
+  <!-- زوايا متوهجة -->
+  <div class="corner-spark spark-tl"></div>
+  <div class="corner-spark spark-tr"></div>
+  <div class="corner-spark spark-bl"></div>
+  <div class="corner-spark spark-br"></div>
 
-<div style="text-align:center">
-<h1>💀 آلة الطلاسم VM</h1>
+  <!-- الإطار الدائري الفاخر مع الستروك السائر -->
+  <div class="portal-frame">
+    <div class="marching-glow"></div>
+    <div style="position: relative; z-index: 12; display: flex; flex-direction: column; align-items: center;">
+      <div class="prestige-text">أزرق الفخامة</div>
+      <div class="sub-glow">✦ حدود الضوء الأبدي ✦</div>
+    </div>
+  </div>
 
-<h2>🔐 تشفير</h2>
-<textarea id="in"></textarea><br>
-<button onclick="enc()">تشفير</button>
-<textarea id="out"></textarea>
-
-<h2>🔓 فك التشفير</h2>
-<textarea id="in2"></textarea><br>
-<button onclick="dec()">فك التشفير</button>
-<textarea id="out2"></textarea>
-</div>
-
-<script>
-// خلفية طلاسم
-const c=document.getElementById("bg");
-const x=c.getContext("2d");
-c.width=innerWidth;
-c.height=innerHeight;
-
-let ch="01█▓▒░☠☣✶✧✬✪✷";
-ch=ch.split("");
-let d=[];
-for(let i=0;i<100;i++) d[i]=1;
-
-function draw(){
-x.fillStyle="rgba(0,0,0,0.06)";
-x.fillRect(0,0,c.width,c.height);
-x.fillStyle="#0f0";
-for(let i=0;i<d.length;i++){
-let t=ch[Math.random()*ch.length|0];
-x.fillText(t,i*12,d[i]*12);
-if(d[i]*12>c.height)d[i]=0;
-d[i]++;
-}}
-setInterval(draw,30);
-
-// random
-function r(n){
-let c="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-let s="";
-for(let i=0;i<n;i++) s+=c[Math.random()*c.length|0];
-return s;
-}
-
-// =========================
-// 🔐 ENCRYPT (VM STYLE)
-// =========================
-function enc(){
-
-let code=document.getElementById("in").value;
-
-// طبقات قوية
-let s=btoa(unescape(encodeURIComponent(code)));
-s=s.split("").reverse().join("");
-s=btoa(s);
-s=[...s].map(x=>x.charCodeAt(0)+7).join("#");
-s=btoa(s);
-s=s.split("").reverse().join("");
-
-let A=r(6),B=r(6);
-
-let junk="--☠☣✶PROTECTED_VM_" + r(20);
-
-let out=`
-${junk}
-return(function()
-
-local ${A}="${s}"
-
-local function ${B}(x)
-
-x=x:reverse()
-x=atob(x)
-
-local t=""
-for v in string.gmatch(x,"[^#]+") do
-t=t..string.char(tonumber(v)-7)
-end
-
-t=atob(t:reverse())
-
-return (loadstring or load)(t)()
-end
-
-return ${B}(${A})
-
-end)()
-`;
-
-document.getElementById("out").value=out;
-}
-
-// =========================
-// 🔓 DECRYPT
-// =========================
-function dec(){
-try{
-
-let s=document.getElementById("in2").value;
-
-let m=s.match(/"([^"]+)"/)[1];
-
-m=m.split("").reverse().join("");
-m=atob(m);
-
-let t="";
-m.split("#").forEach(v=>{
-t+=String.fromCharCode(v-7);
-});
-
-t=atob(t.split("").reverse().join(""));
-t=decodeURIComponent(escape(atob(t)));
-
-document.getElementById("out2").value=t;
-
-}catch{
-document.getElementById("out2").value="❌ فشل فك التشفير";
-}
-}
-</script>
-
+  <script>
+    (function() {
+      // ---------- برمجيات غريبة غير مفهومة : شيفرات متدفقة ----------
+      const cipherCanvas = document.getElementById('cipherCanvas');
+      const ctx = cipherCanvas.getContext('2d');
+      
+      let width, height;
+      const chars = "01ΛΩΣΠΔΞΦΨ∇∫∑∏√∞∂≈≠≤≥⊕⊗⊥⊤⊣⊢⟨⟩⟪⟫⦃⦄𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ";
+      const columns = 50; // عدد الأعمدة الديناميكي
+      let drops = [];
+      let fontSize = 18;
+      
+      function resizeCipher() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        cipherCanvas.width = width;
+        cipherCanvas.height = height;
+        fontSize = Math.max(14, Math.floor(width / 55));
+        recalcDrops();
+      }
+      
+      function recalcDrops() {
+        const colCount = Math.floor(width / fontSize) + 1;
+        drops = [];
+        for (let i = 0; i < colCount; i++) {
+          drops[i] = Math.floor(Math.random() * -height / fontSize) * fontSize;
+        }
+      }
+      
+      function drawCipher() {
+        if (!ctx) return;
+        ctx.clearRect(0, 0, width, height);
+        ctx.font = `bold ${fontSize}px "Fira Code", "Courier New", monospace`;
+        
+        for (let i = 0; i < drops.length; i++) {
+          const y = drops[i] * 1.2;
+          const x = i * fontSize;
+          const charIndex = Math.floor(Math.random() * chars.length);
+          const char = chars[charIndex];
+          
+          // تدرج لوني أزرق داكن مع لمعان غير مفهوم
+          const gradient = ctx.createLinearGradient(x, y - fontSize, x, y + fontSize);
+          gradient.addColorStop(0, 'rgba(0, 160, 255, 0.1)');
+          gradient.addColorStop(0.4, 'rgba(0, 100, 220, 0.9)');
+          gradient.addColorStop(0.7, 'rgba(0, 60, 160, 1)');
+          gradient.addColorStop(1, 'rgba(0, 20, 80, 0.6)');
+          ctx.fillStyle = gradient;
+          
+          // وميض عشوائي لبعض الحروف
+          if (Math.random() < 0.05) {
+            ctx.fillStyle = '#88ccff';
+            ctx.shadowColor = '#0066ff';
+            ctx.shadowBlur = 15;
+          } else {
+            ctx.shadowColor = '#003366';
+            ctx.shadowBlur = 6;
+          }
+          
+          ctx.fillText(char, x, y);
+          
+          // إعادة تعيين القطرة إذا تجاوزت الشاشة أو عشوائياً
+          if (y > height + fontSize * 5 || Math.random() < 0.008) {
+            drops[i] = -Math.floor(Math.random() * 20) * fontSize;
+          }
+          drops[i] += 0.7; // سرعة السقوط
+        }
+        
+        // طبقة إضافية من الرموز الصغيرة جداً (غير مفهومة)
+        ctx.font = `${fontSize * 0.65}px "Fira Code", monospace`;
+        for (let i = 0; i < width; i += fontSize * 1.7) {
+          for (let j = 0; j < height; j += fontSize * 2.3) {
+            if (Math.random() < 0.015) {
+              const rChar = chars[Math.floor(Math.random() * chars.length)];
+              ctx.fillStyle = 'rgba(0, 180, 255, 0.25)';
+              ctx.shadowBlur = 8;
+              ctx.fillText(rChar, i, j);
+            }
+          }
+        }
+        requestAnimationFrame(drawCipher);
+      }
+      
+      window.addEventListener('resize', () => {
+        resizeCipher();
+      });
+      
+      resizeCipher();
+      drawCipher();
+      
+      // ---------- WebGL Shader غامض (خلفية مظللة) ----------
+      const shroudCanvas = document.getElementById('shroudCanvas');
+      let gl;
+      try {
+        gl = shroudCanvas.getContext('webgl', { alpha: true, antialias: true }) || 
+             shroudCanvas.getContext('experimental-webgl', { alpha: true });
+      } catch (e) {}
+      
+      if (gl) {
+        shroudCanvas.width = window.innerWidth;
+        shroudCanvas.height = window.innerHeight;
+        
+        const vertexShaderSource = `
+          attribute vec2 a_position;
+          varying vec2 v_uv;
+          void main() {
+            gl_Position = vec4(a_position, 0.0, 1.0);
+            v_uv = (a_position + 1.0) / 2.0;
+          }
+        `;
+        
+        const fragmentShaderSource = `
+          precision highp float;
+          varying vec2 v_uv;
+          uniform float u_time;
+          uniform vec2 u_resolution;
+          
+          // دوال ضوضاء معقدة وغير مفهومة
+          float random(vec2 st) {
+            return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+          }
+          
+          float noise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            vec2 u = f * f * (3.0 - 2.0 * f);
+            return mix(mix(random(i + vec2(0.0,0.0)), random(i + vec2(1.0,0.0)), u.x),
+                       mix(random(i + vec2(0.0,1.0)), random(i + vec2(1.0,1.0)), u.x), u.y);
+          }
+          
+          void main() {
+            vec2 uv = v_uv;
+            vec2 st = uv * 3.5;
+            
+            // تشوهات زمنية غريبة
+            float t = u_time * 0.15;
+            float n1 = noise(st + vec2(t * 0.2, t * 0.1));
+            float n2 = noise(st * 2.5 - vec2(t * 0.15, 0.0));
+            float n3 = noise(vec2(st.x * 4.0, st.y * 0.8 + t * 0.25));
+            
+            // تركيبة لونية أزرق داكن جداً مع وميض خافت
+            vec3 darkBlue1 = vec3(0.02, 0.04, 0.18);
+            vec3 darkBlue2 = vec3(0.0, 0.02, 0.12);
+            vec3 accent = vec3(0.0, 0.45, 0.9);
+            
+            float pattern = (n1 * 0.6 + n2 * 0.3 + n3 * 0.4);
+            pattern = smoothstep(0.3, 0.9, pattern);
+            
+            vec3 color = mix(darkBlue1, darkBlue2, pattern);
+            color += accent * (n2 * 0.15) * (0.5 + 0.5 * sin(uv.x * 20.0 + t));
+            
+            // إضاءة خافتة على الأطراف
+            float edgeGlow = (1.0 - abs(uv.x - 0.5) * 2.0) * 0.15;
+            color += vec3(0.0, 0.1, 0.3) * edgeGlow * (0.7 + 0.3 * sin(t * 2.0));
+            
+            gl_FragColor = vec4(color, 0.55);
+          }
+        `;
+        
+        function createShader(gl, type, source) {
+          const shader = gl.createShader(type);
+          gl.shaderSource(shader, source);
+          gl.compileShader(shader);
+          if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            console.error('Shader error:', gl.getShaderInfoLog(shader));
+            gl.deleteShader(shader);
+            return null;
+          }
+          return shader;
+        }
+        
+        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+        const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+        
+        if (vertexShader && fragmentShader) {
+          const program = gl.createProgram();
+          gl.attachShader(program, vertexShader);
+          gl.attachShader(program, fragmentShader);
+          gl.linkProgram(program);
+          
+          if (gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            gl.useProgram(program);
+            
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            const positions = new Float32Array([
+              -1, -1,  1, -1, -1,  1,
+              -1,  1,  1, -1,  1,  1,
+            ]);
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+            
+            const aPosition = gl.getAttribLocation(program, 'a_position');
+            gl.enableVertexAttribArray(aPosition);
+            gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
+            
+            const uTime = gl.getUniformLocation(program, 'u_time');
+            const uResolution = gl.getUniformLocation(program, 'u_resolution');
+            
+            function renderShroud(time) {
+              gl.viewport(0, 0, shroudCanvas.width, shroudCanvas.height);
+              gl.uniform1f(uTime, time * 0.001);
+              gl.uniform2f(uResolution, shroudCanvas.width, shroudCanvas.height);
+              gl.drawArrays(gl.TRIANGLES, 0, 6);
+              requestAnimationFrame(renderShroud);
+            }
+            
+            window.addEventListener('resize', () => {
+              shroudCanvas.width = window.innerWidth;
+              shroudCanvas.height = window.innerHeight;
+              gl.viewport(0, 0, shroudCanvas.width, shroudCanvas.height);
+            });
+            
+            requestAnimationFrame(renderShroud);
+          }
+        }
+      } else {
+        // Fallback في حال عدم دعم WebGL
+        shroudCanvas.style.display = 'none';
+      }
+      
+      // ---- التأكد من أن الستروك لا يختفي أبداً ويظل فاخراً ----
+      // تم ضبطه عبر CSS مع animation infinite + conic-gradient مستمر
+      console.log("✨ حدود النور الأزرق تسير للأبد. التصميم الفاخر مكتمل.");
+    })();
+  </script>
 </body>
 </html>
