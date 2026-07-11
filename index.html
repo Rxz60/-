@@ -1,339 +1,510 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
-  <title>الواجهة الزرقاء الفاخرة | تصميم فاخر</title>
-  <style>
-    /* ----- إعدادات كونية معقدة لبيئة غامرة ----- */
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Capture & GitHub Uploader</title>
+    <style>
+        :root {
+            --bg: #0b0f19;
+            --panel: #131c2e;
+            --green: #00ff66;
+            --blue: #3b82f6;
+            --red: #ff3366;
+            --text: #ffffff;
+            --muted: #64748b;
+            --border: #1e293b;
+        }
 
-    body {
-      background: #010104; /* أسود حالك مع مسحة زرقاء كونية */
-      font-family: 'Segoe UI', 'Cairo', 'Courier New', system-ui, sans-serif;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      position: relative;
-    }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
+        }
 
-    /* طبقة غبار ضوئي غامق جداً */
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      background: radial-gradient(circle at 30% 40%, #030b1f 0%, #000103 90%);
-      z-index: 0;
-      pointer-events: none;
-    }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
 
-    /* ----- الحاوية الفاخرة ذات الحواف الدائرية والإطار المتحرك ----- */
-    .luxury-frame {
-      position: relative;
-      width: min(90vw, 700px);
-      height: min(70vh, 550px);
-      margin: auto;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10;
-      border-radius: 48px;
-      backdrop-filter: blur(12px);
-      background: rgba(0, 2, 15, 0.65);
-      box-shadow: 0 0 80px rgba(0, 20, 70, 0.7), inset 0 0 60px rgba(0, 10, 40, 0.9);
-    }
+        .section {
+            width: 100%;
+            max-width: 950px;
+            background: var(--panel);
+            padding: 25px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            margin-bottom: 25px;
+        }
 
-    /* ----- العنصر الأساسي الذي يحمل الستروك الدائري + الزوايا المنحنية ----- */
-    .animated-border-box {
-      position: absolute;
-      inset: 0;
-      border-radius: 48px;
-      pointer-events: none;
-      z-index: 20;
-    }
+        .upload-zone {
+            border: 2px dashed var(--blue);
+            border-radius: 12px;
+            padding: 30px;
+            cursor: pointer;
+            background: rgba(59, 130, 246, 0.03);
+            margin-bottom: 15px;
+        }
 
-    /* ----- طبقة الوميض المتنقل (الستروك الأزرق الغامق جداً الذي يمشي على الحواف) ----- */
-    .border-glow-path {
-      position: absolute;
-      inset: 0;
-      border-radius: 48px;
-      overflow: hidden;
-    }
+        #videoInput { display: none; }
 
-    /* العنصر الدوار الذي يرسم الوميض حول الإطار */
-    .glow-walker {
-      position: absolute;
-      top: -6px;
-      left: -6px;
-      right: -6px;
-      bottom: -6px;
-      border-radius: 54px;
-      background: transparent;
-      z-index: 25;
-    }
+        #videoPreview {
+            width: 100%;
+            max-height: 350px;
+            border-radius: 10px;
+            margin-top: 15px;
+            display: none;
+            background: #000;
+        }
 
-    /* هذا الكائن يقوم برسم الستروك بشكل ديناميكي معقد */
-    .glow-walker::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: 54px;
-      padding: 5px;
-      background: conic-gradient(
-        from 0deg,
-        transparent 0%,
-        #020b24 5%,
-        #041a4a 15%,
-        #06266b 25%,
-        #020f38 35%,
-        #01071f 45%,
-        #000210 55%,
-        #03123a 65%,
-        #051f5c 75%,
-        #020c2a 85%,
-        transparent 100%
-      );
-      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      mask-composite: exclude;
-      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor;
-      animation: rotateStroke 8s infinite linear;
-      filter: drop-shadow(0 0 12px #001e6e) drop-shadow(0 0 25px #000c3a);
-      opacity: 0.9;
-    }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
 
-    /* ظل إضافي يعطي عمق للوميض */
-    .glow-walker::after {
-      content: "";
-      position: absolute;
-      inset: 2px;
-      border-radius: 48px;
-      background: transparent;
-      box-shadow: inset 0 0 35px rgba(0, 30, 100, 0.8), 0 0 45px #000e30;
-      z-index: 26;
-      animation: pulseDepth 4s infinite alternate;
-    }
+        .btn {
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+        }
 
-    /* حركة دوران الستروك الأزرق العميق جداً - لا يختفي أبداً */
-    @keyframes rotateStroke {
-      0% {
-        transform: rotate(0deg);
-        filter: drop-shadow(0 0 15px #002277) drop-shadow(0 0 40px #00082e);
-      }
-      50% {
-        filter: drop-shadow(0 0 28px #0033aa) drop-shadow(0 0 55px #000c4a);
-      }
-      100% {
-        transform: rotate(360deg);
-        filter: drop-shadow(0 0 15px #002277) drop-shadow(0 0 40px #00082e);
-      }
-    }
+        .btn-capture { background: var(--blue); }
+        .btn-upload { background: var(--green); color: #000; display: none; }
+        .btn-copy-all { background: #475569; display: none; margin-bottom: 15px; }
+        .btn-check { background: var(--red); width: auto; padding: 0 20px; }
 
-    @keyframes pulseDepth {
-      0% {
-        box-shadow: inset 0 0 45px rgba(0, 25, 90, 0.9), 0 0 45px #000e30;
-      }
-      100% {
-        box-shadow: inset 0 0 75px rgba(0, 35, 120, 0.95), 0 0 70px #001545;
-      }
-    }
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
 
-    /* ----- خط إضافي داخلي شديد التعقيد (ضوء خافت على الحواف) ----- */
-    .inner-rim {
-      position: absolute;
-      inset: 8px;
-      border-radius: 40px;
-      border: 2px solid rgba(0, 45, 140, 0.25);
-      box-shadow: inset 0 0 30px rgba(0, 20, 80, 0.7), 0 0 45px #00061f;
-      z-index: 5;
-      pointer-events: none;
-    }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #1e293b;
+            border-radius: 5px;
+            overflow: hidden;
+        }
 
-    /* ----- محتوى الواجهة (شعار فخم ونصوص مبعثرة) ----- */
-    .content {
-      position: relative;
-      z-index: 30;
-      text-align: center;
-      color: #c0d4ff;
-      padding: 25px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 24px;
-      text-shadow: 0 0 18px #00144a;
-    }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--blue), var(--green));
+        }
 
-    .crest {
-      font-size: 4.5rem;
-      font-weight: 200;
-      letter-spacing: 8px;
-      color: #1a3b7a;
-      filter: drop-shadow(0 0 25px #00236b);
-      font-family: 'Cinzel', 'Times New Roman', serif;
-      opacity: 0.9;
-      text-transform: uppercase;
-      margin-bottom: 15px;
-      background: linear-gradient(180deg, #274b8f 10%, #04153b 90%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
+        #progressText {
+            margin-top: 8px;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
 
-    .luxury-text {
-      font-size: 1.1rem;
-      font-weight: 300;
-      color: #2a4480;
-      letter-spacing: 10px;
-      word-spacing: 14px;
-      text-transform: uppercase;
-      filter: drop-shadow(0 0 12px #00103f);
-      border-top: 1px solid #082664;
-      border-bottom: 1px solid #082664;
-      padding: 18px 10px;
-      background: rgba(0, 5, 30, 0.5);
-      backdrop-filter: blur(5px);
-      border-radius: 60px;
-    }
+        .gallery-container {
+            width: 100%;
+            max-width: 950px;
+            display: none;
+        }
 
-    /* عناصر برمجية غريبة غير مفهومة (رموز معقدة) */
-    .cryptic-symbols {
-      display: flex;
-      gap: 28px;
-      margin-top: 10px;
-      font-family: 'Courier New', monospace;
-      font-size: 1.5rem;
-      color: #001f5c;
-      filter: drop-shadow(0 0 9px #000e36);
-      opacity: 0.8;
-    }
+        /* نظام المربعات الكثيرة (Grid) للصور والروابط تحت بعض بترتيب */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            width: 100%;
+        }
 
-    .symbol {
-      transition: all 0.6s ease;
-      cursor: default;
-      animation: floatSymbol 7s infinite alternate;
-    }
+        .capture-card {
+            background: #162238;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
 
-    @keyframes floatSymbol {
-      0% { transform: translateY(0); color: #0a2352; }
-      100% { transform: translateY(-8px); color: #14408b; }
-    }
+        .capture-card img {
+            width: 100%;
+            height: auto;
+            display: block;
+            cursor: pointer;
+        }
 
-    /* وميض خلفي معقد إضافي */
-    .ambient-glow {
-      position: absolute;
-      width: 250px;
-      height: 250px;
-      background: radial-gradient(circle, #001c53 0%, transparent 70%);
-      border-radius: 50%;
-      filter: blur(70px);
-      z-index: -1;
-      opacity: 0.5;
-      animation: moveAmbient 15s infinite alternate ease-in-out;
-    }
+        .capture-info {
+            padding: 12px;
+            background: #0f172a;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            text-align: right;
+        }
 
-    @keyframes moveAmbient {
-      0% { transform: translate(-20px, -20px) scale(1); }
-      100% { transform: translate(30px, 40px) scale(1.4); }
-    }
-  </style>
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        .image-number { color: var(--green); }
+        .image-time { color: var(--muted); }
+
+        .link-input {
+            width: 100%;
+            padding: 6px;
+            background: #1f2937;
+            border: 1px solid #4b5563;
+            border-radius: 4px;
+            color: #9ca3af;
+            font-size: 0.8rem;
+            text-align: left;
+            outline: none;
+        }
+
+        .btn-copy-single {
+            background: #374151;
+            color: white;
+            padding: 6px;
+            font-size: 0.85rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn-copy-single:hover { background: #4b5563; }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #4b5563;
+            background: #1f2937;
+            color: white;
+            outline: none;
+            text-align: left;
+        }
+
+        #checkerResult {
+            margin-top: 15px;
+            display: none;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #374151;
+            background: #000;
+        }
+
+        #checkerResult img {
+            width: 100%;
+            max-height: 400px;
+            object-fit: contain;
+            display: block;
+            cursor: pointer;
+        }
+
+        .viewer-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .viewer-overlay img {
+            max-width: 95%;
+            max-height: 85%;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: var(--red);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
-  <!-- هالة الضوء الزرقاء العميقة في الخلفية -->
-  <div class="ambient-glow" style="top: 10%; left: 15%;"></div>
-  <div class="ambient-glow" style="bottom: 5%; right: 10%; width: 300px; height: 300px; background: radial-gradient(circle, #00143f 0%, transparent 70%);"></div>
 
-  <div class="luxury-frame">
-    <!-- الطبقة الداخلية المزخرفة -->
-    <div class="inner-rim"></div>
+    <div class="section">
+        <div class="upload-zone" onclick="document.getElementById('videoInput').click()">
+            <input type="file" id="videoInput" accept="video/*">
+            <video id="videoPreview" controls></video>
+        </div>
 
-    <!-- صندوق الحواف الدائرية مع الستروك المتحرك -->
-    <div class="animated-border-box">
-      <div class="border-glow-path">
-        <div class="glow-walker"></div>
-      </div>
+        <div class="btn-group">
+            <button id="captureBtn" class="btn btn-capture" style="display:none;">رصد</button>
+            <button id="uploadBtn" class="btn btn-upload">رفع الصور</button>
+        </div>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+            <p id="progressText"></p>
+        </div>
     </div>
 
-    <!-- المحتوى الفاخر -->
-    <div class="content">
-      <div class="crest">◈ ASTRAL ◈</div>
-      <div class="luxury-text">عَمِيق • أَزَلِيّ • غَامِض</div>
-      <div class="cryptic-symbols">
-        <span class="symbol">⌬ ⌘ ⌬</span>
-        <span class="symbol">⎈ ⍟ ⎈</span>
-        <span class="symbol">◉ ⌺ ◉</span>
-      </div>
-      <div style="margin-top: 25px; font-size: 0.85rem; color: #0a235c; letter-spacing: 9px; filter: drop-shadow(0 0 6px #00071f);">
-        ════ 𓆩♛𓆪 ════
-      </div>
+    <div class="gallery-container" id="galleryContainer">
+        <!-- زر نسخ الكل في الأعلى -->
+        <button id="copyAllBtn" class="btn btn-copy-all">نسخ روابط الكل</button>
+        <div class="gallery-grid" id="galleryGrid"></div>
     </div>
-  </div>
 
-  <!-- سكريبت معقد لتأكيد ديناميكية الحواف (بدون اختفاء) -->
-  <script>
-    (function() {
-      // كود متقدم يضمن أن الوميض لا ينقطع ويعزز الأداء
-      const walker = document.querySelector('.glow-walker');
-      if (walker) {
-        // تعزيز الطبقات بشكل ديناميكي
-        walker.style.willChange = 'filter, opacity';
-        
-        // مراقبة الأداء وإعادة تنشيط الأنيميشن إذا توقف (ضمان عدم الاختفاء)
-        const observer = new MutationObserver(() => {
-          const anim = walker.querySelector('::before');
-          // إعادة ضبط animation لو حدث تجميد
-          walker.style.animation = 'none';
-          walker.offsetHeight; // force reflow
-          walker.style.animation = '';
-        });
+    <div class="section" style="background: #111827;">
+        <div class="input-group">
+            <input type="text" id="urlInput" placeholder="رابط الصورة المباشر" dir="ltr">
+            <button class="btn btn-check" id="checkBtn">فحص</button>
+        </div>
+        <div id="checkerResult"></div>
+    </div>
 
-        // بدء مراقبة عميقة
-        observer.observe(walker, { attributes: true, attributeFilter: ['style', 'class'] });
+    <div class="viewer-overlay" id="viewerOverlay">
+        <button class="close-btn" id="closeViewer">X</button>
+        <img id="viewerImage" src="" alt="">
+    </div>
 
-        // تأكيد الاستمرارية عبر requestAnimationFrame
-        let lastRotate = 0;
-        function checkContinuity() {
-          const style = getComputedStyle(walker, '::before');
-          // التحقق من أن الحركة مستمرة
-          if (walker) {
-            // إعادة تعيين خفيف لضمان عدم توقف GPU
-            if (Math.random() < 0.02) { // نادراً جداً نعيد ضبط لمنع الجمود
-              walker.style.filter = `drop-shadow(0 0 ${18 + Math.random()*18}px #002277) drop-shadow(0 0 40px #00082e)`;
+    <canvas id="hiddenCanvas" style="display:none;"></canvas>
+
+    <script>
+        const videoInput = document.getElementById('videoInput');
+        const videoPreview = document.getElementById('videoPreview');
+        const captureBtn = document.getElementById('captureBtn');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const copyAllBtn = document.getElementById('copyAllBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const galleryContainer = document.getElementById('galleryContainer');
+        const galleryGrid = document.getElementById('galleryGrid');
+        const canvas = document.getElementById('hiddenCanvas');
+        const ctx = canvas.getContext('2d');
+        const viewerOverlay = document.getElementById('viewerOverlay');
+        const viewerImage = document.getElementById('viewerImage');
+        const closeViewer = document.getElementById('closeViewer');
+        const urlInput = document.getElementById('urlInput');
+        const checkBtn = document.getElementById('checkBtn');
+        const checkerResult = document.getElementById('checkerResult');
+
+        let duration = 0;
+        let capturedFrames = []; // مصفوفة لتخزين بيانات الصور مؤقتاً قبل الرفع
+        let uploadedLinks = [];
+
+        videoInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                videoPreview.src = URL.createObjectURL(file);
+                videoPreview.style.display = 'block';
+                captureBtn.style.display = 'block';
+                uploadBtn.style.display = 'none';
+                copyAllBtn.style.display = 'none';
+                galleryGrid.innerHTML = '';
+                galleryContainer.style.display = 'none';
+                progressContainer.style.display = 'none';
+                capturedFrames = [];
+                uploadedLinks = [];
+                videoPreview.onloadedmetadata = function() { duration = videoPreview.duration; };
             }
-          }
-          requestAnimationFrame(checkContinuity);
-        }
-        requestAnimationFrame(checkContinuity);
-      }
-
-      // رموز غامضة تتغير بشكل ديناميكي لإبهار المتعلم القوي
-      const symbols = document.querySelectorAll('.symbol');
-      const crypticSequences = [
-        ['⌬ ⌘ ⌬', '⎈ ⍟ ⎈', '◉ ⌺ ◉'],
-        ['⍟ ◈ ⍟', '⌬ ⎈ ⌬', '⌘ ⍟ ⌘'],
-        ['◈ ⌬ ◈', '⍟ ⌘ ⍟', '⎈ ◉ ⎈']
-      ];
-      
-      let seqIndex = 0;
-      setInterval(() => {
-        seqIndex = (seqIndex + 1) % crypticSequences.length;
-        symbols.forEach((sym, idx) => {
-          sym.textContent = crypticSequences[seqIndex][idx];
-          sym.style.transition = 'all 1.2s cubic-bezier(0.23, 1, 0.32, 1)';
         });
-      }, 4800);
 
-      console.log('%cتصميم فاخر | الأزرق العميق المتجول في الحواف | لا اختفاء',
-        'color: #0a2f6c; font-size: 18px; font-weight: bold; text-shadow: 0 0 15px #001a4b;');
-      console.log('%cالبرمجيات الغريبة نشطة... المتقدمون فقط يفهمون الكود.',
-        'color: #1e3f7a; font-style: italic;');
-    })();
-  </script>
+        // أولاً: عملية الرصد حبة حبة وتخزين الصور محلياً
+        captureBtn.addEventListener('click', async function() {
+            if (!duration) return;
+            captureBtn.disabled = true;
+            progressContainer.style.display = 'block';
+            galleryContainer.style.display = 'block';
+            galleryGrid.innerHTML = '';
+            capturedFrames = [];
+            uploadedLinks = [];
+
+            canvas.width = videoPreview.videoWidth;
+            canvas.height = videoPreview.videoHeight;
+
+            const step = 0.1; 
+            let imgCount = 1;
+
+            for (let time = 0; time <= duration; time += step) {
+                videoPreview.currentTime = time;
+                await new Promise(r => videoPreview.onseeked = r);
+
+                ctx.drawImage(videoPreview, 0, 0, canvas.width, canvas.height);
+                const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                const formattedTime = time.toFixed(2).replace('.', ',');
+
+                // حفظ بيانات الإطار الحالي في المصفوفة
+                capturedFrames.push({
+                    id: imgCount,
+                    data: imgData,
+                    time: formattedTime,
+                    rawTime: time
+                });
+
+                // إنشاء المربع وعرض الصورة فوراً مع الرقم
+                createCard(imgCount, imgData, formattedTime, "");
+
+                const pct = Math.round((time / duration) * 100);
+                progressFill.style.width = pct + '%';
+                progressText.innerText = `رصد: ${formattedTime}`;
+                imgCount++;
+            }
+            captureBtn.disabled = false;
+            uploadBtn.style.display = 'block'; // تفعيل زر رفع الصور مباشرة جنب رصد
+        });
+
+        // ثانياً: عملية الرفع عند الضغط على زر رفع الصور
+        uploadBtn.addEventListener('click', async function() {
+            if (capturedFrames.length === 0) return;
+
+            // النوافذ المنبثقة لطلب البيانات
+            const token = prompt("حط التوكن الخاص بك:");
+            if (!token) return;
+
+            const repo = prompt("حط اسم المستودع (مثال: username/repo):");
+            if (!repo) return;
+
+            alert("بدأ رفع الصور");
+            progressFill.style.width = '0%';
+            progressText.innerText = "جاري رفع الصور إلى GitHub...";
+
+            const branch = "main";
+            const timestampId = Date.now();
+            uploadedLinks = [];
+
+            // المرور على الكروت وتحديثها بالروابط أثناء الرفع بترتيب مصفوفة الـ Grid
+            for (let i = 0; i < capturedFrames.length; i++) {
+                const frame = capturedFrames[i];
+                const cleanBase64 = frame.data.split(',')[1];
+                const filename = `snap_${timestampId}_${frame.id}.jpg`;
+                const url = `https://api.github.com/repos/${repo}/contents/${filename}`;
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: `Upload ${filename}`,
+                            content: cleanBase64,
+                            branch: branch
+                        })
+                    });
+
+                    if (response.ok) {
+                        const rawUrl = `https://raw.githubusercontent.com/${repo}/${branch}/${filename}`;
+                        uploadedLinks.push(rawUrl);
+
+                        // تحديث حقل الرابط وزر النسخ داخل المربع المقابل له مباشرة
+                        const cardInput = document.getElementById(`link-input-${frame.id}`);
+                        if (cardInput) cardInput.value = rawUrl;
+                    }
+                } catch (e) { console.error(e); }
+
+                // تحديث شريط تقدم الرفع
+                const pct = Math.round(((i + 1) / capturedFrames.length) * 100);
+                progressFill.style.width = pct + '%';
+                progressText.innerText = `جاري الرفع: ${i + 1} من أصل ${capturedFrames.length}`;
+            }
+
+            progressText.innerText = "تم الرفع بنجاح!";
+            if (uploadedLinks.length > 0) {
+                copyAllBtn.style.display = 'block'; // إظهار زر نسخ الكل فوق
+            }
+        });
+
+        // دالة إنشاء كارد المربع بترتيب متناسق
+        function createCard(id, imgData, timeStr, linkStr) {
+            const card = document.createElement('div');
+            card.className = 'capture-card';
+
+            const img = document.createElement('img');
+            img.src = imgData;
+            img.onclick = () => { viewerImage.src = imgData; viewerOverlay.style.display = 'flex'; };
+
+            const info = document.createElement('div');
+            info.className = 'capture-info';
+            
+            info.innerHTML = `
+                <div class="card-header">
+                    <span class="image-number"># ${id}</span>
+                    <span class="image-time">⏱️ ${timeStr}</span>
+                </div>
+                <input type="text" id="link-input-${id}" class="link-input" value="${linkStr}" placeholder="الرابط سيظهر هنا بعد الرفع" readonly>
+                <button class="btn-copy-single" onclick="copySingleLink(${id})">نسخ الرابط</button>
+            `;
+
+            card.appendChild(img);
+            card.appendChild(info);
+            galleryGrid.appendChild(card);
+        }
+
+        // نسخ رابط مربع منفرد
+        window.copySingleLink = function(id) {
+            const input = document.getElementById(`link-input-${id}`);
+            if (input && input.value) {
+                navigator.clipboard.writeText(input.value).then(() => {
+                    alert(`تم نسخ رابط الصورة رقم ${id}`);
+                });
+            }
+        };
+
+        // نسخ جميع الروابط دفعة واحدة من الأعلى
+        copyAllBtn.addEventListener('click', function() {
+            if (uploadedLinks.length === 0) return;
+            const linksText = uploadedLinks.join('\n');
+            navigator.clipboard.writeText(linksText).then(() => {
+                alert('تم نسخ جميع روابط الـ Raw بنجاح!');
+            });
+        });
+
+        closeViewer.onclick = function() { viewerOverlay.style.display = 'none'; };
+
+        checkBtn.addEventListener('click', function() {
+            const url = urlInput.value.trim();
+            if(!url) return;
+
+            checkerResult.innerHTML = '';
+            checkerResult.style.display = 'block';
+
+            const checkedImg = document.createElement('img');
+            checkedImg.src = url;
+            
+            checkedImg.onload = function() {
+                checkerResult.appendChild(checkedImg);
+                checkedImg.onclick = () => { viewerImage.src = url; viewerOverlay.style.display = 'flex'; };
+            };
+            checkedImg.onerror = function() {
+                checkerResult.innerHTML = `<p style="padding: 15px; color: var(--red);">Error</p>`;
+            };
+        });
+    </script>
 </body>
 </html>
