@@ -14,7 +14,7 @@ import aiohttp
 
 # ================== الإعدادات ==================
 TOKEN   = "MTU0NTQ1MTUyNzEzNTY5OTAxNA.GcXI8-.WNYC_iq9IuwXSl6I1DyDPkAJNPYlH1AEtRzwA8"   # ← حط التوكن هنا
-IS_BOT  = True              # True =    |   False =TRX جحفله#3949(self-bot)
+IS_BOT  = True              # True =MTU0NTQ1MTUyNzEzNTY5OTAxNA.GcXI8-.WNYC_iq9IuwXSl6I1DyDPkAJNPYlH1AEtRzwA8    |   False =TRX جحفله#3949(self-bot)
 WORKERS = 8                 # عدد الطلبات المتزامنة (لا ترفعه كثير عشان الرايت ليمت)
 # ===============================================
 
